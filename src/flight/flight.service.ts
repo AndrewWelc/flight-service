@@ -1,7 +1,14 @@
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
-import { Injectable, HttpException, HttpStatus, Inject, Logger } from "@nestjs/common";
+import {
+  Injectable,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Logger,
+} from "@nestjs/common";
 import axios from "axios";
 import { Cache } from "cache-manager";
+import { FlightDto } from "./dto/flight.dto";
 
 @Injectable()
 export class FlightService {
@@ -9,10 +16,10 @@ export class FlightService {
 
   constructor(@Inject(CACHE_MANAGER) private readonly cacheManager: Cache) {}
 
-  async fetchFlights() {
+  async fetchFlights(): Promise<FlightDto[]> {
     this.logger.log("Fetching flights");
 
-    let cachedFlights = await this.cacheManager.get("flights");
+    const cachedFlights: FlightDto[] = await this.cacheManager.get("flights");
     if (cachedFlights) {
       this.logger.log("Flights retrieved from cache");
       return cachedFlights;
@@ -31,7 +38,7 @@ export class FlightService {
       ]);
 
       const allFlights = [...source1.data.flights, ...source2.data.flights];
-      const uniqueFlights = this.removeDuplicates(allFlights);
+      const uniqueFlights: FlightDto[] = this.removeDuplicates(allFlights);
 
       await this.cacheManager.set("flights", uniqueFlights, 3600); // Cache for 1 hour
 
@@ -47,9 +54,9 @@ export class FlightService {
     }
   }
 
-  removeDuplicates(flights) {
-    const flightMap = {};
-    const uniqueFlights = [];
+  removeDuplicates(flights: FlightDto[]): FlightDto[] {
+    const flightMap: { [key: string]: boolean } = {};
+    const uniqueFlights: FlightDto[] = [];
 
     flights.forEach((flight) => {
       flight.slices.forEach((slice) => {
