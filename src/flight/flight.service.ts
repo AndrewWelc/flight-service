@@ -1,35 +1,49 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-import axios from 'axios';
+import { CACHE_MANAGER } from "@nestjs/cache-manager";
+import { Injectable, HttpException, HttpStatus, Inject, Logger } from "@nestjs/common";
+import axios from "axios";
+import { Cache } from "cache-manager";
 
 @Injectable()
 export class FlightService {
-  private cache: any = {};
-  private cacheExpireTime: any = {};
+  private readonly logger = new Logger(FlightService.name);
+
+  constructor(@Inject(CACHE_MANAGER) private readonly cacheManager: Cache) {}
 
   async fetchFlights() {
-    // Check if the data exists in cache and is not expired
-    if (this.cache['flights'] && new Date().getTime() < this.cacheExpireTime['flights']) {
-      return this.cache['flights'];
+    this.logger.log("Fetching flights");
+
+    let cachedFlights = await this.cacheManager.get("flights");
+    if (cachedFlights) {
+      this.logger.log("Flights retrieved from cache");
+      return cachedFlights;
     }
 
     try {
-      const source1Promise = axios.get('https://coding-challenge.powerus.de/flight/source1');
-      const source2Promise = axios.get('https://coding-challenge.powerus.de/flight/source2');
-      const [source1, source2] = await Promise.all([source1Promise, source2Promise]);
-      
-      // Merge flights from both sources
-      const allFlights = [...source1.data.flights, ...source2.data.flights];
+      const source1Promise = axios.get(
+        "https://coding-challenge.powerus.de/flight/source1"
+      );
+      const source2Promise = axios.get(
+        "https://coding-challenge.powerus.de/flight/source2"
+      );
+      const [source1, source2] = await Promise.all([
+        source1Promise,
+        source2Promise,
+      ]);
 
-      // Remove duplicates based on flight numbers and dates
+      const allFlights = [...source1.data.flights, ...source2.data.flights];
       const uniqueFlights = this.removeDuplicates(allFlights);
-      
-      // Cache the data for an hour
-      this.cache['flights'] = uniqueFlights;
-      this.cacheExpireTime['flights'] = new Date().getTime() + 60 * 60 * 1000; // 1 hour in milliseconds
+
+      await this.cacheManager.set("flights", uniqueFlights, 3600); // Cache for 1 hour
+
+      this.logger.log("Flights fetched and cached");
 
       return uniqueFlights;
     } catch (error) {
-      throw new HttpException('Failed to fetch flight data', HttpStatus.INTERNAL_SERVER_ERROR);
+      this.logger.error("Failed to fetch flight data", error.stack);
+      throw new HttpException(
+        "Failed to fetch flight data",
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
     }
   }
 
@@ -37,8 +51,8 @@ export class FlightService {
     const flightMap = {};
     const uniqueFlights = [];
 
-    flights.forEach(flight => {
-      flight.slices.forEach(slice => {
+    flights.forEach((flight) => {
+      flight.slices.forEach((slice) => {
         const identifier = `${slice.flight_number}_${slice.departure_date_time_utc}`;
         if (!flightMap[identifier]) {
           flightMap[identifier] = true;
