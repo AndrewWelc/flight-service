@@ -1,0 +1,28 @@
+version: '3'
+
+services:
+  flight-service:
+    image: flight-service
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    restart: always
+    ports:
+      - 3001:3001
+    env_file:
+      - .env
+    networks:
+      - backend-network
+    depends_on:
+      - redis
+
+  redis:
+    image: "redis:latest"
+    ports:
+      - "6379:6379"
+    networks:
+      - backend-network
+
+networks:
+  backend-network:
+    driver: bridge
