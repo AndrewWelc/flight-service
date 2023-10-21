@@ -11,15 +11,27 @@ services:
       - 3001:3001
     env_file:
       - .env
+    environment:
+      - MONGO_CONNECTION=mongodb://mongo:27017
+      - MONGO_DB=flight-service
     networks:
       - backend-network
     depends_on:
       - redis
+      - mongo
+    command: ["sh", "-c", "npm run migrate && npm run start"]
 
   redis:
     image: "redis:latest"
     ports:
       - "6379:6379"
+    networks:
+      - backend-network
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
     networks:
       - backend-network
 
