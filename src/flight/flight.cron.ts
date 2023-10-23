@@ -54,6 +54,18 @@ export class FlightCronService implements OnApplicationBootstrap {
   }
 
   /**
+   * This cron job runs every day at midnight to refresh flight sources.
+   */
+  @Cron("0 0 * * *")
+  async refreshFlightSourcesCron() {
+    try {
+      await this.flightService.refreshFlightSources();
+    } catch (error) {
+      this.logger.error("Error refreshing flight sources:", error);
+    }
+  }
+
+  /**
    * Fetches flight data from various sources and caches it.
    * It handles its own errors, logging them and allowing the process to continue.
    */

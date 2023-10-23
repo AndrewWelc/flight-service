@@ -36,7 +36,7 @@ export class FlightService implements OnModuleInit {
   async fetchFlights(): Promise<FlightDto[]> {
     const cacheKey = this.configService.get<string>("CACHE_KEY_FLIGHTS");
     const flights = await this.cacheManager.get<FlightDto[]>(cacheKey);
-  
+
     if (!flights) {
       this.logger.warn("No flights available in cache");
       return [];
@@ -88,5 +88,14 @@ export class FlightService implements OnModuleInit {
     });
 
     return uniqueFlights;
+  }
+
+  /**
+   * Refreshes the flight sources from the database.
+   */
+  async refreshFlightSources() {
+    const sources = await this.flightSourceModel.find().exec();
+    this.flightSources = sources.map((doc) => new GenericFlightSource(doc.url));
+    this.logger.log("Refreshed flight sources");
   }
 }
