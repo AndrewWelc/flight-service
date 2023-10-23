@@ -52,7 +52,6 @@ export class FlightService implements OnModuleInit {
       this.flightSources.map((source) => source.fetchFlights())
     );
     const allFlights = flightDataFromAllSources.flat();
-    console.log(JSON.stringify(allFlights))
     return this.removeDuplicates(allFlights);
   }
 
