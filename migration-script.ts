@@ -1,5 +1,5 @@
 import { runInitialFlightSourcesMigration } from "./src/migrations/initialFlightSources.migration";
-import { mongodbConnect } from "./src/common/utils";
+import { mongodbConnect } from "./src/utils/mongo.utils";
 import { Logger } from "@nestjs/common";
 
 async function main() {

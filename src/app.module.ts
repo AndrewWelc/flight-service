@@ -10,10 +10,13 @@ import {
   FlightSource,
   FlightSourceSchema,
 } from "./flight/schema/flight-source.schema";
+import { ScheduleModule } from "@nestjs/schedule";
+import { FlightCronService } from "./flight/flight.cron";
 
 @Module({
   imports: [
     CacheModule.register<RedisClientOptions>(cacheConfig),
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({ envFilePath: ".env", isGlobal: true }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
@@ -40,6 +43,6 @@ import {
     ]),
   ],
   controllers: [FlightController],
-  providers: [FlightService],
+  providers: [FlightService, FlightCronService],
 })
 export class AppModule {}

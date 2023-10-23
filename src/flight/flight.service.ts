@@ -1,9 +1,7 @@
-import { CACHE_MANAGER } from "@nestjs/cache-manager";
+import { CACHE_MANAGER } from "@nestjs/common/cache/cache.constants";
 import { Injectable, Inject, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectModel } from "@nestjs/mongoose";
-import axios from "axios";
-import axiosRetry from "axios-retry";
 import { Cache } from "cache-manager";
 import { Model } from "mongoose";
 import { FlightDto } from "./dto/flight.dto";
@@ -13,44 +11,18 @@ import {
   FlightSource,
   FlightSourceDocument,
 } from "./schema/flight-source.schema";
-import * as CircuitBreaker from "opossum";
 
 @Injectable()
 export class FlightService implements OnModuleInit {
   private flightSources: IFlightSource[] = [];
-  
-  // Circuit breaker to handle failed external requests
-  private readonly breaker: CircuitBreaker;
+  private readonly logger = new Logger(FlightService.name);
 
   constructor(
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
     private configService: ConfigService,
     @InjectModel(FlightSource.name)
     private readonly flightSourceModel: Model<FlightSourceDocument>
-  ) {
-    // Configure axios retry settings
-    axiosRetry(axios, {
-      retries: 2,
-      retryDelay: axiosRetry.exponentialDelay,
-    });
-
-    // Initialize the circuit breaker with configurations from environment
-    const timeout = Number(this.configService.get("BREAKER_TIMEOUT"));
-    const errorThresholdPercentage = Number(
-      this.configService.get("ERROR_THRESHOLD_PERCENTAGE")
-    );
-    const resetTimeout = Number(this.configService.get("RESET_TIMEOUT"));
-
-    this.breaker = new CircuitBreaker(this.fetchAllFlightsFromSources, {
-      timeout,
-      errorThresholdPercentage,
-      resetTimeout,
-    });
-    // Set fallback function for the circuit breaker
-    this.breaker.fallback(() => this.fetchFlightsFromCache());
-  }
-
-  private readonly logger = new Logger(FlightService.name);
+  ) {}
 
   async onModuleInit() {
     // Initialize flight sources upon module initialization
@@ -58,22 +30,24 @@ export class FlightService implements OnModuleInit {
     this.flightSources = sources.map((doc) => new GenericFlightSource(doc.url));
   }
 
+  /**
+   * Fetch cached flight data.
+   */
   async fetchFlights(): Promise<FlightDto[]> {
     const cacheKey = this.configService.get<string>("CACHE_KEY_FLIGHTS");
-    const cacheExpiry = Number(this.configService.get<string>("CACHE_EXPIRY_TIME"));
-
-    this.logger.log("Fetching flights");
-    const flights = (await this.breaker.fire()) as FlightDto[];
-
-    // Cache the fetched flights
-    await this.cacheManager.set(cacheKey, flights, { ttl: cacheExpiry });
-    this.logger.log("Flights fetched and cached");
-
+    const flights = await this.cacheManager.get<FlightDto[]>(cacheKey);
+  
+    if (!flights) {
+      this.logger.warn("No flights available in cache");
+      return [];
+    }
     return flights;
   }
 
-  // Fetch all flights from various sources and flatten them
-  private async fetchAllFlightsFromSources(): Promise<FlightDto[]> {
+  /**
+   * Fetch all flights from various sources, remove duplicates and return.
+   */
+  async fetchAllFlightsFromSources(): Promise<FlightDto[]> {
     const flightDataFromAllSources = await Promise.all(
       this.flightSources.map((source) => source.fetchFlights())
     );
@@ -81,17 +55,20 @@ export class FlightService implements OnModuleInit {
     return this.removeDuplicates(allFlights);
   }
 
-  // Retrieve cached flights if the circuit breaker activates the fallback
-  private async fetchFlightsFromCache(): Promise<FlightDto[]> {
+  /**
+   * Cache the provided flight data.
+   */
+  async cacheFlights(flights: FlightDto[]) {
     const cacheKey = this.configService.get<string>("CACHE_KEY_FLIGHTS");
-    const cachedFlights = await this.cacheManager.get<FlightDto[]>(cacheKey);
-    if (cachedFlights) {
-      return cachedFlights;
-    }
-    throw new Error("No flights in fallback cache");
+    const cacheExpiry = Number(
+      this.configService.get<string>("CACHE_EXPIRY_TIME")
+    );
+    await this.cacheManager.set(cacheKey, flights, { ttl: cacheExpiry });
   }
 
-  // Remove duplicate flights based on unique identifiers
+  /**
+   * Remove duplicate flights based on unique identifiers.
+   */
   private removeDuplicates(flights: FlightDto[]): FlightDto[] {
     const flightIdentifiers = new Set<string>();
     const uniqueFlights: FlightDto[] = [];
