@@ -12,6 +12,7 @@ import {
 } from "./flight/schema/flight-source.schema";
 import { ScheduleModule } from "@nestjs/schedule";
 import { FlightCronService } from "./flight/flight.cron";
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { FlightCronService } from "./flight/flight.cron";
     MongooseModule.forFeature([
       { name: FlightSource.name, schema: FlightSourceSchema },
     ]),
+    HealthModule,
   ],
   controllers: [FlightController],
   providers: [FlightService, FlightCronService],
